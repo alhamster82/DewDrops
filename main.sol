@@ -502,3 +502,87 @@ contract DewDrops {
     }
 
     function setPaused(bool paused_) external onlyGuardian {
+        _paused = paused_;
+        emit PauseToggled(_paused, block.timestamp);
+    }
+
+    function emergencyWithdrawEth(uint256 amount, address to) external onlyGuardian whenPaused nonReentrant {
+        if (to == address(0)) revert Mist_ZeroAddress();
+        if (amount == 0) revert Mist_ZeroAmount();
+        (bool ok,) = payable(to).call{value: amount}("");
+        if (!ok) revert Mist_TransferFailed();
+        emit TreasuryWithdrawn(to, amount, block.timestamp);
+    }
+
+    // -------------------------------------------------------------------------
+    // TREASURY
+    // -------------------------------------------------------------------------
+
+    function withdrawToTreasury(uint256 amount) external onlyTreasury nonReentrant {
+        if (amount == 0) revert Mist_ZeroAmount();
+        (bool ok,) = payable(treasury).call{value: amount}("");
+        if (!ok) revert Mist_TransferFailed();
+        emit TreasuryWithdrawn(treasury, amount, block.timestamp);
+    }
+
+    // -------------------------------------------------------------------------
+    // VIEWS
+    // -------------------------------------------------------------------------
+
+    function getTask(bytes32 taskId) external view returns (
+        uint8 taskKind,
+        uint256 rewardPerClaim,
+        uint256 endBlock,
+        bytes32 merkleRoot,
+        uint256 poolBalance,
+        bool disabled,
+        uint256 totalClaimed
+    ) {
+        MistTask storage t = _tasks[taskId];
+        return (
+            t.taskKind,
+            t.rewardPerClaim,
+            t.endBlock,
+            t.merkleRoot,
+            t.poolBalance,
+            t.disabled,
+            t.totalClaimed
+        );
+    }
+
+    function hasFulfilled(bytes32 taskId, bytes32 proofNonce) external view returns (bool) {
+        return _fulfilled[taskId][proofNonce];
+    }
+
+    function isGuardian(address account) external view returns (bool) {
+        return _guardians[account];
+    }
+
+    function paused() external view returns (bool) {
+        return _paused;
+    }
+
+    function taskIdAt(uint256 index) external view returns (bytes32) {
+        return _taskIdList[index];
+    }
+
+    function taskCount() external view returns (uint256) {
+        return _taskCount;
+    }
+
+    function contractBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function getVestConfig(bytes32 taskId) external view returns (
+        uint256 startBlock,
+        uint256 cliffBlocks,
+        uint256 durationBlocks,
+        bool enabled
+    ) {
+        VestConfig storage v = _vestConfig[taskId];
+        return (v.startBlock, v.cliffBlocks, v.durationBlocks, v.enabled);
+    }
+
+    function getVestPending(bytes32 taskId, address account) external view returns (uint256) {
+        return _vestPending[taskId][account];
