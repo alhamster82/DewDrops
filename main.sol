@@ -1510,3 +1510,87 @@ contract DewDrops {
     }
 
     function getRemainingBlocks(bytes32 taskId) external view returns (uint256) {
+        return blocksRemaining(taskId);
+    }
+
+    function getTaskActive(bytes32 taskId) external view returns (bool) {
+        return isTaskActive(taskId);
+    }
+
+    function getTaskExpired(bytes32 taskId) external view returns (bool) {
+        return block.number > _tasks[taskId].endBlock;
+    }
+
+    function getTaskExists(bytes32 taskId) external view returns (bool) {
+        return _tasks[taskId].merkleRoot != bytes32(0);
+    }
+
+    function getNumTasks() external view returns (uint256) {
+        return _taskCount;
+    }
+
+    function getListLength() external view returns (uint256) {
+        return _taskIdList.length;
+    }
+
+    function getGlobalClaimed() external view returns (uint256) {
+        return _globalTotalClaimed;
+    }
+
+    function getUserClaimed(address account) external view returns (uint256) {
+        return _userTotalClaimed[account];
+    }
+
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function getPaused() external view returns (bool) {
+        return _paused;
+    }
+
+    function getTreasury() external view returns (address) {
+        return treasury;
+    }
+
+    function getVerifier() external view returns (address) {
+        return taskVerifier;
+    }
+
+    function getGuardianHubAddr() external view returns (address) {
+        return guardianHub;
+    }
+
+    function getGuardian(address account) external view returns (bool) {
+        return _guardians[account];
+    }
+
+    function getHasFulfilled(bytes32 taskId, bytes32 proofNonce) external view returns (bool) {
+        return _fulfilled[taskId][proofNonce];
+    }
+
+    function getLeaf(address participant, bytes32 proofNonce, bytes32 taskId) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(participant, proofNonce, taskId, DOMAIN_SEED));
+    }
+
+    function getMerkleVerify(bytes32[] calldata proof, bytes32 root, bytes32 leaf) external pure returns (bool) {
+        bytes32 h = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 p = proof[i];
+            h = h < p ? keccak256(abi.encodePacked(h, p)) : keccak256(abi.encodePacked(p, h));
+        }
+        return h == root;
+    }
+
+    function getMin(uint256 a, uint256 b) external pure returns (uint256) { return minU256(a, b); }
+    function getMax(uint256 a, uint256 b) external pure returns (uint256) { return maxU256(a, b); }
+    function getSaturatingSub(uint256 a, uint256 b) external pure returns (uint256) { return saturatingSub(a, b); }
+    function getClamp(uint256 val, uint256 lo, uint256 hi) external pure returns (uint256) { return clampBlock(val, lo, hi); }
+    function getProportional(uint256 part, uint256 total, uint256 whole) external pure returns (uint256) { return proportional(part, total, whole); }
+    function getIsZeroAddr(address a) external pure returns (bool) { return isZeroAddress(a); }
+    function getIsZeroB32(bytes32 b) external pure returns (bool) { return isZeroBytes32(b); }
+    function getWeiToEther(uint256 w) external pure returns (uint256) { return weiToEther(w); }
+    function getEtherToWei(uint256 e) external pure returns (uint256) { return etherToWei(e); }
+    function getPercent(uint256 part, uint256 whole) external pure returns (uint256) { return percentOf(part, whole); }
+    function getBlocksToTime(uint256 blocks, uint256 secPerBlock) external pure returns (uint256) { return blocksToApproxTime(blocks, secPerBlock); }
+
