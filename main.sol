@@ -838,3 +838,87 @@ contract DewDrops {
 
     function getRewards(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
         uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].rewardPerClaim;
+        return out;
+    }
+
+    function getEndBlocks(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].endBlock;
+        return out;
+    }
+
+    function getTotalClaimeds(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].totalClaimed;
+        return out;
+    }
+
+    function getDisabledFlags(bytes32[] calldata taskIds) external view returns (bool[] memory) {
+        uint256 n = taskIds.length;
+        bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].disabled;
+        return out;
+    }
+
+    function getTaskKinds(bytes32[] calldata taskIds) external view returns (uint8[] memory) {
+        uint256 n = taskIds.length;
+        uint8[] memory out = new uint8[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].taskKind;
+        return out;
+    }
+
+    function getMerkleRoots(bytes32[] calldata taskIds) external view returns (bytes32[] memory) {
+        uint256 n = taskIds.length;
+        bytes32[] memory out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].merkleRoot;
+        return out;
+    }
+
+    function getCreatedAts(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskCreatedAt[taskIds[i]];
+        return out;
+    }
+
+    function vestProgress(bytes32 taskId, address account) external view returns (
+        uint256 pending,
+        uint256 claimedSoFar,
+        uint256 claimableNow,
+        uint256 startBlock,
+        uint256 cliffEnd,
+        uint256 vestEnd
+    ) {
+        VestConfig storage v = _vestConfig[taskId];
+        pending = _vestPending[taskId][account];
+        claimedSoFar = _vestClaimed[taskId][account];
+        startBlock = v.startBlock;
+        cliffEnd = v.startBlock + v.cliffBlocks;
+        vestEnd = v.startBlock + v.durationBlocks;
+        if (!v.enabled || pending == 0) { claimableNow = 0; return (pending, claimedSoFar, 0, startBlock, cliffEnd, vestEnd); }
+        if (block.number < cliffEnd) { claimableNow = 0; return (pending, claimedSoFar, 0, startBlock, cliffEnd, vestEnd); }
+        uint256 elapsed = block.number - startBlock;
+        if (elapsed > v.durationBlocks) elapsed = v.durationBlocks;
+        uint256 vestedTotal = (pending * elapsed) / v.durationBlocks;
+        claimableNow = vestedTotal > claimedSoFar ? vestedTotal - claimedSoFar : 0;
+    }
+
+    function estimateVestAtBlock(bytes32 taskId, address account, uint256 atBlock) external view returns (uint256 claimable) {
+        VestConfig storage v = _vestConfig[taskId];
+        if (!v.enabled) return 0;
+        uint256 pending = _vestPending[taskId][account];
+        if (pending == 0) return 0;
+        if (atBlock < v.startBlock + v.cliffBlocks) return 0;
+        uint256 elapsed = atBlock - v.startBlock;
+        if (elapsed > v.durationBlocks) elapsed = v.durationBlocks;
+        uint256 vestedTotal = (pending * elapsed) / v.durationBlocks;
+        uint256 already = _vestClaimed[taskId][account];
+        return vestedTotal > already ? vestedTotal - already : 0;
+    }
+
+    function totalVestPendingForTask(bytes32 taskId) external view returns (uint256) {
+        return _tasks[taskId].totalClaimed;
