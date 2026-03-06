@@ -1342,3 +1342,87 @@ contract DewDrops {
     }
 
     function totalVestClaimedForUser(address account, bytes32[] calldata taskIds) external view returns (uint256 total) {
+        for (uint256 i = 0; i < taskIds.length; i++) total += _vestClaimed[taskIds[i]][account];
+    }
+
+    function buildLeaf(address participant, bytes32 proofNonce, bytes32 taskId) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(participant, proofNonce, taskId, DOMAIN_SEED));
+    }
+
+    function checkProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf) external pure returns (bool) {
+        bytes32 h = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 p = proof[i];
+            h = h < p ? keccak256(abi.encodePacked(h, p)) : keccak256(abi.encodePacked(p, h));
+        }
+        return h == root;
+    }
+
+    // -------------------------------------------------------------------------
+    // CONFIGURATION AND CONSTANTS (read-only exposure)
+    // -------------------------------------------------------------------------
+    // MIST_VERSION: protocol version for compatibility
+    // MAX_TASK_KIND: 0..11 inclusive
+    // MIN_END_BLOCK_OFFSET: minimum blocks from now for task end
+    // MAX_CLAIM_BATCH: max claims per claimDropletBatch call
+    // PAGE_SIZE: default pagination size for getTaskIdsPaginated
+    // MAX_TASKS_PER_BATCH: max tasks in createTaskBatch
+    // MIN_REWARD_WEI / MAX_REWARD_WEI: optional bounds for reward validation off-chain
+    // DEFAULT_VEST_CLIFF_BLOCKS / DEFAULT_VEST_DURATION_BLOCKS: suggested vest defaults
+    // TASK_KIND_*: keccak256 labels for task types (twitter, discord, etc.)
+    // DOMAIN_SEED: used in leaf hash to avoid cross-contract replay
+    // -------------------------------------------------------------------------
+
+    function supportedTaskKinds() external pure returns (uint8[] memory kinds) {
+        kinds = new uint8[](12);
+        kinds[0] = 0;
+        kinds[1] = 1;
+        kinds[2] = 2;
+        kinds[3] = 3;
+        kinds[4] = 4;
+        kinds[5] = 5;
+        kinds[6] = 6;
+        kinds[7] = 7;
+        kinds[8] = 8;
+        kinds[9] = 9;
+        kinds[10] = 10;
+        kinds[11] = 11;
+    }
+
+    function taskKindFromString(string calldata name) external pure returns (int256) {
+        if (keccak256(bytes(name)) == TASK_KIND_TWITTER) return 0;
+        if (keccak256(bytes(name)) == TASK_KIND_DISCORD) return 1;
+        if (keccak256(bytes(name)) == TASK_KIND_TELEGRAM) return 2;
+        if (keccak256(bytes(name)) == TASK_KIND_RETWEET) return 3;
+        if (keccak256(bytes(name)) == TASK_KIND_QUOTE) return 4;
+        if (keccak256(bytes(name)) == TASK_KIND_LIKE) return 5;
+        if (keccak256(bytes(name)) == TASK_KIND_COMMENT) return 6;
+        if (keccak256(bytes(name)) == TASK_KIND_JOIN) return 7;
+        if (keccak256(bytes(name)) == TASK_KIND_SHARE) return 8;
+        if (keccak256(bytes(name)) == TASK_KIND_WATCH) return 9;
+        if (keccak256(bytes(name)) == TASK_KIND_FOLLOW) return 10;
+        if (keccak256(bytes(name)) == TASK_KIND_CUSTOM) return 11;
+        return -1;
+    }
+
+    function nameForTaskKind(uint8 k) external pure returns (string memory) {
+        return getTaskKindName(k);
+    }
+
+    function maxBatchSize() external pure returns (uint256) {
+        return MAX_CLAIM_BATCH;
+    }
+
+    function defaultPageSize() external pure returns (uint256) {
+        return PAGE_SIZE;
+    }
+
+    function protocolVersion() external pure returns (uint256) {
+        return MIST_VERSION;
+    }
+
+    function domainSeedHash() external pure returns (bytes32) {
+        return DOMAIN_SEED;
+    }
+
+    // -------------------------------------------------------------------------
