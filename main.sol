@@ -754,3 +754,87 @@ contract DewDrops {
         uint256 n = taskIds.length;
         if (n != proofNonces.length) revert Mist_ArrayLengthMismatch();
         bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _fulfilled[taskIds[i]][proofNonces[i]];
+        return out;
+    }
+
+    function getVestedAmountBatch(bytes32[] calldata taskIds, address account) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            VestConfig storage v = _vestConfig[taskIds[i]];
+            if (!v.enabled) { out[i] = 0; continue; }
+            uint256 pending = _vestPending[taskIds[i]][account];
+            if (pending == 0) { out[i] = 0; continue; }
+            uint256 start = v.startBlock;
+            uint256 cliff = v.cliffBlocks;
+            uint256 dur = v.durationBlocks;
+            if (block.number < start + cliff) { out[i] = 0; continue; }
+            uint256 elapsed = block.number - start;
+            if (elapsed > dur) elapsed = dur;
+            uint256 vestedTotal = (pending * elapsed) / dur;
+            uint256 already = _vestClaimed[taskIds[i]][account];
+            out[i] = vestedTotal > already ? vestedTotal - already : 0;
+        }
+        return out;
+    }
+
+    // --- Pure helpers (no state) ---
+    function minU256(uint256 a, uint256 b) public pure returns (uint256) { return a < b ? a : b; }
+    function maxU256(uint256 a, uint256 b) public pure returns (uint256) { return a > b ? a : b; }
+    function saturatingSub(uint256 a, uint256 b) public pure returns (uint256) { return a > b ? a - b : 0; }
+    function clampBlock(uint256 val, uint256 lo, uint256 hi) public pure returns (uint256) {
+        if (val < lo) return lo;
+        if (val > hi) return hi;
+        return val;
+    }
+    function proportional(uint256 part, uint256 total, uint256 whole) public pure returns (uint256) {
+        if (total == 0) return 0;
+        return (part * whole) / total;
+    }
+    function isZeroAddress(address a) public pure returns (bool) { return a == address(0); }
+    function isZeroBytes32(bytes32 b) public pure returns (bool) { return b == bytes32(0); }
+
+    // -------------------------------------------------------------------------
+    // ADDITIONAL VIEWS (convenience)
+    // -------------------------------------------------------------------------
+
+    function listActiveTaskIds(uint256 maxReturn) external view returns (bytes32[] memory) {
+        uint256 total = _taskIdList.length;
+        uint256 count = 0;
+        for (uint256 i = 0; i < total && count < maxReturn; i++) {
+            if (isTaskActive(_taskIdList[i])) count++;
+        }
+        bytes32[] memory out = new bytes32[](count);
+        count = 0;
+        for (uint256 i = 0; i < total && count < maxReturn; i++) {
+            bytes32 id = _taskIdList[i];
+            if (isTaskActive(id)) { out[count] = id; count++; }
+        }
+        return out;
+    }
+
+    function listTaskIdsByKind(uint8 kind, uint256 maxReturn) external view returns (bytes32[] memory) {
+        uint256 total = _taskIdList.length;
+        uint256 count = 0;
+        for (uint256 i = 0; i < total && count < maxReturn; i++) {
+            if (_tasks[_taskIdList[i]].taskKind == kind) count++;
+        }
+        bytes32[] memory out = new bytes32[](count);
+        count = 0;
+        for (uint256 i = 0; i < total && count < maxReturn; i++) {
+            bytes32 id = _taskIdList[i];
+            if (_tasks[id].taskKind == kind) { out[count] = id; count++; }
+        }
+        return out;
+    }
+
+    function getPoolBalances(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].poolBalance;
+        return out;
+    }
+
+    function getRewards(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
