@@ -1090,3 +1090,87 @@ contract DewDrops {
         uint256[] memory rewards,
         uint256[] memory endBlocks,
         uint256[] memory pools,
+        uint256[] memory claimeds,
+        bool[] memory actives
+    ) {
+        uint256 n = taskIds.length;
+        rewards = new uint256[](n);
+        endBlocks = new uint256[](n);
+        pools = new uint256[](n);
+        claimeds = new uint256[](n);
+        actives = new bool[](n);
+        for (uint256 i = 0; i < n; i++) {
+            MistTask storage t = _tasks[taskIds[i]];
+            rewards[i] = t.rewardPerClaim;
+            endBlocks[i] = t.endBlock;
+            pools[i] = t.poolBalance;
+            claimeds[i] = t.totalClaimed;
+            actives[i] = t.merkleRoot != bytes32(0) && !t.disabled && block.number <= t.endBlock;
+        }
+    }
+
+    function getMultipleVestConfigs(bytes32[] calldata taskIds) external view returns (
+        uint256[] memory startBlocks,
+        uint256[] memory cliffBlocks,
+        uint256[] memory durationBlocks,
+        bool[] memory enableds
+    ) {
+        uint256 n = taskIds.length;
+        startBlocks = new uint256[](n);
+        cliffBlocks = new uint256[](n);
+        durationBlocks = new uint256[](n);
+        enableds = new bool[](n);
+        for (uint256 i = 0; i < n; i++) {
+            VestConfig storage v = _vestConfig[taskIds[i]];
+            startBlocks[i] = v.startBlock;
+            cliffBlocks[i] = v.cliffBlocks;
+            durationBlocks[i] = v.durationBlocks;
+            enableds[i] = v.enabled;
+        }
+    }
+
+    function getParticipantVestSummary(address account, bytes32[] calldata taskIds) external view returns (
+        uint256[] memory pendingAmounts,
+        uint256[] memory claimedAmounts,
+        uint256[] memory claimableAmounts
+    ) {
+        uint256 n = taskIds.length;
+        pendingAmounts = new uint256[](n);
+        claimedAmounts = new uint256[](n);
+        claimableAmounts = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 id = taskIds[i];
+            pendingAmounts[i] = _vestPending[id][account];
+            claimedAmounts[i] = _vestClaimed[id][account];
+            VestConfig storage v = _vestConfig[id];
+            if (!v.enabled || pendingAmounts[i] == 0) { claimableAmounts[i] = 0; continue; }
+            if (block.number < v.startBlock + v.cliffBlocks) { claimableAmounts[i] = 0; continue; }
+            uint256 elapsed = block.number - v.startBlock;
+            if (elapsed > v.durationBlocks) elapsed = v.durationBlocks;
+            uint256 vestedTotal = (pendingAmounts[i] * elapsed) / v.durationBlocks;
+            claimableAmounts[i] = vestedTotal > claimedAmounts[i] ? vestedTotal - claimedAmounts[i] : 0;
+        }
+    }
+
+    function computeLeafFor(address participant, bytes32 proofNonce, bytes32 taskId) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(participant, proofNonce, taskId, DOMAIN_SEED));
+    }
+
+    function verifyProofAgainstRoot(bytes32[] calldata proof, bytes32 root, bytes32 leaf) external pure returns (bool) {
+        bytes32 h = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 p = proof[i];
+            h = h < p ? keccak256(abi.encodePacked(h, p)) : keccak256(abi.encodePacked(p, h));
+        }
+        return h == root;
+    }
+
+    // -------------------------------------------------------------------------
+    // BULK READ HELPERS — reduce RPC calls from UIs
+    // -------------------------------------------------------------------------
+
+    function getTaskIdsFromOffset(uint256 offset, uint256 limit) external view returns (bytes32[] memory) {
+        return getTaskIdsPaginated(offset, limit);
+    }
+
+    function getActiveTaskIdsBounded(uint256 maxLen) external view returns (bytes32[] memory) {
