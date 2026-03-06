@@ -670,3 +670,87 @@ contract DewDrops {
         if (t.endBlock <= block.number) return 0;
         return t.endBlock - block.number;
     }
+
+    function computeLeaf(address participant, bytes32 proofNonce, bytes32 taskId) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(participant, proofNonce, taskId, DOMAIN_SEED));
+    }
+
+    function getTaskKindName(uint8 kind) external pure returns (string memory) {
+        if (kind == 0) return "twitter";
+        if (kind == 1) return "discord";
+        if (kind == 2) return "telegram";
+        if (kind == 3) return "retweet";
+        if (kind == 4) return "quote";
+        if (kind == 5) return "like";
+        if (kind == 6) return "comment";
+        if (kind == 7) return "join";
+        if (kind == 8) return "share";
+        if (kind == 9) return "watch";
+        if (kind == 10) return "follow";
+        if (kind == 11) return "custom";
+        return "unknown";
+    }
+
+    function taskReward(bytes32 taskId) external view returns (uint256) { return _tasks[taskId].rewardPerClaim; }
+    function taskEndBlock(bytes32 taskId) external view returns (uint256) { return _tasks[taskId].endBlock; }
+    function taskPoolBalance(bytes32 taskId) external view returns (uint256) { return _tasks[taskId].poolBalance; }
+    function taskMerkleRoot(bytes32 taskId) external view returns (bytes32) { return _tasks[taskId].merkleRoot; }
+    function taskDisabled(bytes32 taskId) external view returns (bool) { return _tasks[taskId].disabled; }
+    function taskTotalClaimed(bytes32 taskId) external view returns (uint256) { return _tasks[taskId].totalClaimed; }
+    function taskKind(bytes32 taskId) external view returns (uint8) { return _tasks[taskId].taskKind; }
+
+    function vestStartBlock(bytes32 taskId) external view returns (uint256) { return _vestConfig[taskId].startBlock; }
+    function vestCliffBlocks(bytes32 taskId) external view returns (uint256) { return _vestConfig[taskId].cliffBlocks; }
+    function vestDurationBlocks(bytes32 taskId) external view returns (uint256) { return _vestConfig[taskId].durationBlocks; }
+    function vestEnabled(bytes32 taskId) external view returns (bool) { return _vestConfig[taskId].enabled; }
+
+    function canClaimImmediate(bytes32 taskId, address who, bytes32 proofNonce) external view returns (bool) {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0) || t.disabled || block.number > t.endBlock) return false;
+        if (_fulfilled[taskId][proofNonce]) return false;
+        if (t.poolBalance < t.rewardPerClaim) return false;
+        if (_vestConfig[taskId].enabled) return false;
+        return true;
+    }
+
+    function canClaimVested(bytes32 taskId, address who) external view returns (bool) {
+        if (!_vestConfig[taskId].enabled) return false;
+        if (_vestPending[taskId][who] == 0) return false;
+        VestConfig storage v = _vestConfig[taskId];
+        if (block.number < v.startBlock + v.cliffBlocks) return false;
+        uint256 elapsed = block.number - v.startBlock;
+        if (elapsed > v.durationBlocks) elapsed = v.durationBlocks;
+        uint256 vestedTotal = (_vestPending[taskId][who] * elapsed) / v.durationBlocks;
+        return vestedTotal > _vestClaimed[taskId][who];
+    }
+
+    function getTaskSummary(bytes32 taskId) external view returns (
+        uint256 reward,
+        uint256 endBlock,
+        uint256 poolBal,
+        uint256 claimed,
+        bool active
+    ) {
+        MistTask storage t = _tasks[taskId];
+        active = t.merkleRoot != bytes32(0) && !t.disabled && block.number <= t.endBlock;
+        return (t.rewardPerClaim, t.endBlock, t.poolBalance, t.totalClaimed, active);
+    }
+
+    function getGlobalStats() external view returns (
+        uint256 totalTasks,
+        uint256 totalClaimedWei,
+        uint256 balanceWei
+    ) {
+        return (_taskCount, _globalTotalClaimed, address(this).balance);
+    }
+
+    function getParticipantStats(address account) external view returns (
+        uint256 totalClaimedWei
+    ) {
+        return (_userTotalClaimed[account]);
+    }
+
+    function hasFulfilledBatch(bytes32[] calldata taskIds, bytes32[] calldata proofNonces, address account) external view returns (bool[] memory) {
+        uint256 n = taskIds.length;
+        if (n != proofNonces.length) revert Mist_ArrayLengthMismatch();
+        bool[] memory out = new bool[](n);
