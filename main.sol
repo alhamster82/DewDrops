@@ -166,3 +166,87 @@ contract DewDrops {
     }
 
     // -------------------------------------------------------------------------
+    // MODIFIERS
+    // -------------------------------------------------------------------------
+
+    modifier onlyGuardian() {
+        if (!_guardians[msg.sender]) revert Mist_NotGuardian();
+        _;
+    }
+
+    modifier onlyTreasury() {
+        if (msg.sender != treasury) revert Mist_NotTreasury();
+        _;
+    }
+
+    modifier whenNotPaused() {
+        if (_paused) revert Mist_WhenPaused();
+        _;
+    }
+
+    modifier whenPaused() {
+        if (!_paused) revert Mist_WhenNotPaused();
+        _;
+    }
+
+    modifier nonReentrant() {
+        if (_lock != 0) revert Mist_Reentrancy();
+        _lock = 1;
+        _;
+        _lock = 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // TASK LIFECYCLE (guardian)
+    // -------------------------------------------------------------------------
+
+    function createTask(
+        bytes32 taskId,
+        uint8 taskKind,
+        uint256 rewardPerClaim,
+        uint256 endBlock,
+        bytes32 merkleRoot
+    ) external onlyGuardian whenNotPaused nonReentrant {
+        if (merkleRoot == bytes32(0)) revert Mist_MerkleRootEmpty();
+        if (rewardPerClaim == 0) revert Mist_RewardZero();
+        if (endBlock <= block.number) revert Mist_EndBlockPast();
+        if (taskKind > MAX_TASK_KIND) revert Mist_TaskUnknown();
+        if (_tasks[taskId].merkleRoot != bytes32(0)) revert Mist_TaskUnknown();
+
+        _tasks[taskId] = MistTask({
+            taskKind: taskKind,
+            rewardPerClaim: rewardPerClaim,
+            endBlock: endBlock,
+            merkleRoot: merkleRoot,
+            poolBalance: 0,
+            disabled: false,
+            totalClaimed: 0
+        });
+        _taskIdList.push(taskId);
+        _taskCount += 1;
+        _taskCreatedAt[taskId] = block.timestamp;
+        emit MistTaskCreated(taskId, taskKind, rewardPerClaim, endBlock, merkleRoot, block.timestamp);
+    }
+
+    function createTaskWithVesting(
+        bytes32 taskId,
+        uint8 taskKind,
+        uint256 rewardPerClaim,
+        uint256 endBlock,
+        bytes32 merkleRoot,
+        uint256 cliffBlocks,
+        uint256 durationBlocks
+    ) external onlyGuardian whenNotPaused nonReentrant {
+        if (merkleRoot == bytes32(0)) revert Mist_MerkleRootEmpty();
+        if (rewardPerClaim == 0) revert Mist_RewardZero();
+        if (endBlock <= block.number) revert Mist_EndBlockPast();
+        if (taskKind > MAX_TASK_KIND) revert Mist_TaskUnknown();
+        if (_tasks[taskId].merkleRoot != bytes32(0)) revert Mist_TaskUnknown();
+        if (cliffBlocks > durationBlocks) revert Mist_InvalidCliff();
+        if (durationBlocks == 0) revert Mist_InvalidDuration();
+
+        _tasks[taskId] = MistTask({
+            taskKind: taskKind,
+            rewardPerClaim: rewardPerClaim,
+            endBlock: endBlock,
+            merkleRoot: merkleRoot,
