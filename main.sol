@@ -1678,3 +1678,68 @@ contract DewDrops {
     function getTaskIdsSlice(uint256 start, uint256 length) external view returns (bytes32[] memory) {
         uint256 total = _taskIdList.length;
         if (start >= total || length == 0) return new bytes32[](0);
+        uint256 end = start + length;
+        if (end > total) end = total;
+        uint256 n = end - start;
+        bytes32[] memory out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskIdList[start + i];
+        return out;
+    }
+
+    function getRewardBatch(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getRewards(ids);
+    }
+
+    function getPoolBatch(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getPoolBalances(ids);
+    }
+
+    function getEndBlockBatch(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getEndBlocks(ids);
+    }
+
+    function getClaimedBatch(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getTotalClaimeds(ids);
+    }
+
+    function getDisabledBatch(bytes32[] calldata ids) external view returns (bool[] memory) {
+        return getDisabledFlags(ids);
+    }
+
+    function getKindBatch(bytes32[] calldata ids) external view returns (uint8[] memory) {
+        return getTaskKinds(ids);
+    }
+
+    function getMerkleRootBatch(bytes32[] calldata ids) external view returns (bytes32[] memory) {
+        return getMerkleRoots(ids);
+    }
+
+    function getCreatedAtBatch(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getCreatedAts(ids);
+    }
+
+    // -------------------------------------------------------------------------
+    // MERKLE HELPERS
+    // -------------------------------------------------------------------------
+
+    function _verifyMerkle(
+        bytes32[] memory proof,
+        bytes32 root,
+        bytes32 leaf
+    ) internal pure returns (bool) {
+        bytes32 h = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            bytes32 p = proof[i];
+            h = h < p ? keccak256(abi.encodePacked(h, p)) : keccak256(abi.encodePacked(p, h));
+        }
+        return h == root;
+    }
+
+    // -------------------------------------------------------------------------
+    // RECEIVE
+    // -------------------------------------------------------------------------
+
+    receive() external payable {
+        emit FallbackDeposit(msg.sender, msg.value);
+    }
+}
