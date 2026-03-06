@@ -250,3 +250,87 @@ contract DewDrops {
             rewardPerClaim: rewardPerClaim,
             endBlock: endBlock,
             merkleRoot: merkleRoot,
+            poolBalance: 0,
+            disabled: false,
+            totalClaimed: 0
+        });
+        _vestConfig[taskId] = VestConfig({
+            startBlock: block.number,
+            cliffBlocks: cliffBlocks,
+            durationBlocks: durationBlocks,
+            enabled: true
+        });
+        _taskIdList.push(taskId);
+        _taskCount += 1;
+        _taskCreatedAt[taskId] = block.timestamp;
+        emit MistTaskCreated(taskId, taskKind, rewardPerClaim, endBlock, merkleRoot, block.timestamp);
+    }
+
+    function setVesting(bytes32 taskId, uint256 cliffBlocks, uint256 durationBlocks) external onlyGuardian {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        if (cliffBlocks > durationBlocks) revert Mist_InvalidCliff();
+        if (durationBlocks == 0) revert Mist_InvalidDuration();
+        _vestConfig[taskId] = VestConfig({
+            startBlock: _vestConfig[taskId].startBlock != 0 ? _vestConfig[taskId].startBlock : block.number,
+            cliffBlocks: cliffBlocks,
+            durationBlocks: durationBlocks,
+            enabled: true
+        });
+        emit VestingConfigured(taskId, cliffBlocks, durationBlocks);
+    }
+
+    function disableVesting(bytes32 taskId) external onlyGuardian {
+        if (_tasks[taskId].merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        _vestConfig[taskId].enabled = false;
+    }
+
+    function createTaskBatch(
+        bytes32[] calldata taskIds,
+        uint8[] calldata taskKinds,
+        uint256[] calldata rewardPerClaims,
+        uint256[] calldata endBlocks,
+        bytes32[] calldata merkleRoots
+    ) external onlyGuardian whenNotPaused nonReentrant {
+        uint256 n = taskIds.length;
+        if (n != taskKinds.length || n != rewardPerClaims.length || n != endBlocks.length || n != merkleRoots.length) revert Mist_ArrayLengthMismatch();
+        if (n > MAX_TASKS_PER_BATCH) revert Mist_TooManyTasksInBatch();
+
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 taskId = taskIds[i];
+            if (_tasks[taskId].merkleRoot != bytes32(0)) revert Mist_DuplicateTaskId();
+            if (merkleRoots[i] == bytes32(0)) revert Mist_MerkleRootEmpty();
+            if (rewardPerClaims[i] == 0) revert Mist_RewardZero();
+            if (endBlocks[i] <= block.number) revert Mist_EndBlockPast();
+            if (taskKinds[i] > MAX_TASK_KIND) revert Mist_InvalidTaskKind();
+
+            _tasks[taskId] = MistTask({
+                taskKind: taskKinds[i],
+                rewardPerClaim: rewardPerClaims[i],
+                endBlock: endBlocks[i],
+                merkleRoot: merkleRoots[i],
+                poolBalance: 0,
+                disabled: false,
+                totalClaimed: 0
+            });
+            _taskIdList.push(taskId);
+            _taskCreatedAt[taskId] = block.timestamp;
+            emit MistTaskCreated(taskId, taskKinds[i], rewardPerClaims[i], endBlocks[i], merkleRoots[i], block.timestamp);
+        }
+        _taskCount += n;
+        emit BatchTaskCreated(n, block.number);
+    }
+
+    function topPoolBatch(bytes32[] calldata taskIds, uint256[] calldata amounts) external payable onlyGuardian whenNotPaused {
+        uint256 n = taskIds.length;
+        if (n != amounts.length) revert Mist_ArrayLengthMismatch();
+        uint256 total = 0;
+        for (uint256 i = 0; i < n; i++) {
+            total += amounts[i];
+            MistTask storage t = _tasks[taskIds[i]];
+            if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+            t.poolBalance += amounts[i];
+            emit DewPoolTopped(taskIds[i], amounts[i], t.poolBalance);
+        }
+        if (total != msg.value) revert Mist_ZeroAmount();
+        emit PoolToppedBatch(n, msg.value);
