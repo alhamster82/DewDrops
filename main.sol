@@ -586,3 +586,87 @@ contract DewDrops {
 
     function getVestPending(bytes32 taskId, address account) external view returns (uint256) {
         return _vestPending[taskId][account];
+    }
+
+    function getVestClaimed(bytes32 taskId, address account) external view returns (uint256) {
+        return _vestClaimed[taskId][account];
+    }
+
+    function getVestedAmount(bytes32 taskId, address account) external view returns (uint256 claimable) {
+        VestConfig storage v = _vestConfig[taskId];
+        if (!v.enabled) return 0;
+        uint256 pending = _vestPending[taskId][account];
+        if (pending == 0) return 0;
+        uint256 start = v.startBlock;
+        uint256 cliff = v.cliffBlocks;
+        uint256 dur = v.durationBlocks;
+        if (block.number < start + cliff) return 0;
+        uint256 elapsed = block.number - start;
+        if (elapsed > dur) elapsed = dur;
+        uint256 vestedTotal = (pending * elapsed) / dur;
+        uint256 already = _vestClaimed[taskId][account];
+        if (vestedTotal <= already) return 0;
+        return vestedTotal - already;
+    }
+
+    function taskCreatedAt(bytes32 taskId) external view returns (uint256) {
+        return _taskCreatedAt[taskId];
+    }
+
+    function userTotalClaimed(address account) external view returns (uint256) {
+        return _userTotalClaimed[account];
+    }
+
+    function globalTotalClaimed() external view returns (uint256) {
+        return _globalTotalClaimed;
+    }
+
+    function getTaskIdsPaginated(uint256 offset, uint256 limit) external view returns (bytes32[] memory out) {
+        uint256 total = _taskIdList.length;
+        if (offset >= total) return new bytes32[](0);
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        uint256 n = end - offset;
+        out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskIdList[offset + i];
+    }
+
+    function getTasksBatch(bytes32[] calldata taskIds) external view returns (
+        uint8[] memory taskKinds,
+        uint256[] memory rewardPerClaims,
+        uint256[] memory endBlocks,
+        bytes32[] memory merkleRoots,
+        uint256[] memory poolBalances,
+        bool[] memory disableds,
+        uint256[] memory totalClaimeds
+    ) {
+        uint256 n = taskIds.length;
+        taskKinds = new uint8[](n);
+        rewardPerClaims = new uint256[](n);
+        endBlocks = new uint256[](n);
+        merkleRoots = new bytes32[](n);
+        poolBalances = new uint256[](n);
+        disableds = new bool[](n);
+        totalClaimeds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            MistTask storage t = _tasks[taskIds[i]];
+            taskKinds[i] = t.taskKind;
+            rewardPerClaims[i] = t.rewardPerClaim;
+            endBlocks[i] = t.endBlock;
+            merkleRoots[i] = t.merkleRoot;
+            poolBalances[i] = t.poolBalance;
+            disableds[i] = t.disabled;
+            totalClaimeds[i] = t.totalClaimed;
+        }
+    }
+
+    function isTaskActive(bytes32 taskId) external view returns (bool) {
+        MistTask storage t = _tasks[taskId];
+        return t.merkleRoot != bytes32(0) && !t.disabled && block.number <= t.endBlock;
+    }
+
+    function blocksRemaining(bytes32 taskId) external view returns (uint256) {
+        MistTask storage t = _tasks[taskId];
+        if (t.endBlock <= block.number) return 0;
+        return t.endBlock - block.number;
+    }
