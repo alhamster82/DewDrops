@@ -1174,3 +1174,87 @@ contract DewDrops {
     }
 
     function getActiveTaskIdsBounded(uint256 maxLen) external view returns (bytes32[] memory) {
+        return listActiveTaskIds(maxLen);
+    }
+
+    function getTaskRewardsForIds(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getRewards(ids);
+    }
+
+    function getTaskPoolsForIds(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getPoolBalances(ids);
+    }
+
+    function getTaskEndBlocksForIds(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getEndBlocks(ids);
+    }
+
+    function getTaskTotalClaimedsForIds(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getTotalClaimeds(ids);
+    }
+
+    function getTaskDisabledForIds(bytes32[] calldata ids) external view returns (bool[] memory) {
+        return getDisabledFlags(ids);
+    }
+
+    function getTaskKindsForIds(bytes32[] calldata ids) external view returns (uint8[] memory) {
+        return getTaskKinds(ids);
+    }
+
+    function getTaskMerkleRootsForIds(bytes32[] calldata ids) external view returns (bytes32[] memory) {
+        return getMerkleRoots(ids);
+    }
+
+    function getTaskCreatedAtsForIds(bytes32[] calldata ids) external view returns (uint256[] memory) {
+        return getCreatedAts(ids);
+    }
+
+    function getBlocksRemainingBatch(bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        uint256 n = taskIds.length;
+        uint256[] memory out = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            MistTask storage t = _tasks[taskIds[i]];
+            if (t.endBlock <= block.number) out[i] = 0;
+            else out[i] = t.endBlock - block.number;
+        }
+        return out;
+    }
+
+    function getIsTaskActiveBatch(bytes32[] calldata taskIds) external view returns (bool[] memory) {
+        uint256 n = taskIds.length;
+        bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = isTaskActive(taskIds[i]);
+        return out;
+    }
+
+    function getExistsBatch(bytes32[] calldata taskIds) external view returns (bool[] memory) {
+        uint256 n = taskIds.length;
+        bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _tasks[taskIds[i]].merkleRoot != bytes32(0);
+        return out;
+    }
+
+    function getIsExpiredBatch(bytes32[] calldata taskIds) external view returns (bool[] memory) {
+        uint256 n = taskIds.length;
+        bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = block.number > _tasks[taskIds[i]].endBlock;
+        return out;
+    }
+
+    function getIsDisabledBatch(bytes32[] calldata taskIds) external view returns (bool[] memory) {
+        return getDisabledFlags(taskIds);
+    }
+
+    function getHasFulfilledForUser(bytes32 taskId, address user, bytes32[] calldata proofNonces) external view returns (bool[] memory) {
+        uint256 n = proofNonces.length;
+        bool[] memory out = new bool[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _fulfilled[taskId][proofNonces[i]];
+        return out;
+    }
+
+    function getClaimableVestedForUser(address user, bytes32[] calldata taskIds) external view returns (uint256[] memory) {
+        return getVestedAmountBatch(taskIds, user);
+    }
+
+    function sumRewards(bytes32[] calldata taskIds) external view returns (uint256 total) {
+        for (uint256 i = 0; i < taskIds.length; i++) total += _tasks[taskIds[i]].rewardPerClaim;
