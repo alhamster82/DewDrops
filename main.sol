@@ -922,3 +922,87 @@ contract DewDrops {
 
     function totalVestPendingForTask(bytes32 taskId) external view returns (uint256) {
         return _tasks[taskId].totalClaimed;
+    }
+
+    function getVersion() external pure returns (uint256) { return MIST_VERSION; }
+    function getMaxTaskKind() external pure returns (uint256) { return MAX_TASK_KIND; }
+    function getMaxClaimBatch() external pure returns (uint256) { return MAX_CLAIM_BATCH; }
+    function getPageSize() external pure returns (uint256) { return PAGE_SIZE; }
+    function getDomainSeed() external pure returns (bytes32) { return DOMAIN_SEED; }
+    function getTreasuryAddress() external view returns (address) { return treasury; }
+    function getTaskVerifierAddress() external view returns (address) { return taskVerifier; }
+    function getGuardianHubAddress() external view returns (address) { return guardianHub; }
+
+    // -------------------------------------------------------------------------
+    // EXTENDED VIEWS — task metadata and eligibility
+    // -------------------------------------------------------------------------
+
+    function getTaskFull(bytes32 taskId) external view returns (
+        uint8 kind,
+        uint256 rewardPerClaim,
+        uint256 endBlock,
+        bytes32 merkleRoot,
+        uint256 poolBalance,
+        bool disabled,
+        uint256 totalClaimed,
+        uint256 createdAt,
+        bool hasVesting,
+        uint256 vestCliff,
+        uint256 vestDuration
+    ) {
+        MistTask storage t = _tasks[taskId];
+        VestConfig storage v = _vestConfig[taskId];
+        return (
+            t.taskKind,
+            t.rewardPerClaim,
+            t.endBlock,
+            t.merkleRoot,
+            t.poolBalance,
+            t.disabled,
+            t.totalClaimed,
+            _taskCreatedAt[taskId],
+            v.enabled,
+            v.cliffBlocks,
+            v.durationBlocks
+        );
+    }
+
+    function getEligibility(bytes32 taskId, address account, bytes32 proofNonce) external view returns (
+        bool taskExists,
+        bool taskActive,
+        bool notYetFulfilled,
+        bool poolSufficient,
+        bool hasVestingOption,
+        bool canClaimNow
+    ) {
+        MistTask storage t = _tasks[taskId];
+        taskExists = t.merkleRoot != bytes32(0);
+        taskActive = taskExists && !t.disabled && block.number <= t.endBlock;
+        notYetFulfilled = !_fulfilled[taskId][proofNonce];
+        poolSufficient = t.poolBalance >= t.rewardPerClaim;
+        hasVestingOption = _vestConfig[taskId].enabled;
+        canClaimNow = taskActive && notYetFulfilled && poolSufficient && !hasVestingOption;
+    }
+
+    function getTaskIdsRange(uint256 fromIndex, uint256 toIndex) external view returns (bytes32[] memory) {
+        uint256 total = _taskIdList.length;
+        if (fromIndex >= total) return new bytes32[](0);
+        if (toIndex > total) toIndex = total;
+        if (fromIndex >= toIndex) return new bytes32[](0);
+        uint256 n = toIndex - fromIndex;
+        bytes32[] memory out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskIdList[fromIndex + i];
+        return out;
+    }
+
+    function countActiveTasks() external view returns (uint256) {
+        uint256 c = 0;
+        for (uint256 i = 0; i < _taskIdList.length; i++) {
+            if (isTaskActive(_taskIdList[i])) c++;
+        }
+        return c;
+    }
+
+    function countTasksByKind(uint8 kind) external view returns (uint256) {
+        uint256 c = 0;
+        for (uint256 i = 0; i < _taskIdList.length; i++) {
