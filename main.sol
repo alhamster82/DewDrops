@@ -1006,3 +1006,87 @@ contract DewDrops {
     function countTasksByKind(uint8 kind) external view returns (uint256) {
         uint256 c = 0;
         for (uint256 i = 0; i < _taskIdList.length; i++) {
+            if (_tasks[_taskIdList[i]].taskKind == kind) c++;
+        }
+        return c;
+    }
+
+    function totalPoolBalance() external view returns (uint256 sum) {
+        for (uint256 i = 0; i < _taskIdList.length; i++) sum += _tasks[_taskIdList[i]].poolBalance;
+    }
+
+    function getTaskIdByIndex(uint256 index) external view returns (bytes32) {
+        if (index >= _taskIdList.length) revert Mist_IndexOutOfRange();
+        return _taskIdList[index];
+    }
+
+    function taskListLength() external view returns (uint256) {
+        return _taskIdList.length;
+    }
+
+    // --- Pure numeric helpers (used by frontends) ---
+    function weiToEther(uint256 weiVal) public pure returns (uint256) {
+        return weiVal / 1 ether;
+    }
+    function etherToWei(uint256 etherVal) public pure returns (uint256) {
+        return etherVal * 1 ether;
+    }
+    function percentOf(uint256 part, uint256 whole) public pure returns (uint256) {
+        if (whole == 0) return 0;
+        return (part * 100) / whole;
+    }
+    function blocksToApproxTime(uint256 blocks, uint256 blockTimeSec) public pure returns (uint256 seconds_) {
+        return blocks * blockTimeSec;
+    }
+    function isExpired(bytes32 taskId) external view returns (bool) {
+        return block.number > _tasks[taskId].endBlock;
+    }
+    function isDisabled(bytes32 taskId) external view returns (bool) {
+        return _tasks[taskId].disabled;
+    }
+    function exists(bytes32 taskId) external view returns (bool) {
+        return _tasks[taskId].merkleRoot != bytes32(0);
+    }
+
+    // -------------------------------------------------------------------------
+    // DEW DROPS — social task kind identifiers (for off-chain indexing)
+    // -------------------------------------------------------------------------
+    // Kind 0: twitter — follow, like, retweet
+    // Kind 1: discord — join server, react, message
+    // Kind 2: telegram — join channel, forward
+    // Kind 3: retweet — retweet specific tweet
+    // Kind 4: quote — quote tweet
+    // Kind 5: like — like post
+    // Kind 6: comment — comment on post
+    // Kind 7: join — join community
+    // Kind 8: share — share link
+    // Kind 9: watch — watch video
+    // Kind 10: follow — follow account
+    // Kind 11: custom — custom task type
+    // -------------------------------------------------------------------------
+
+    function taskKindLabel(uint8 k) external pure returns (bytes32) {
+        if (k == 0) return TASK_KIND_TWITTER;
+        if (k == 1) return TASK_KIND_DISCORD;
+        if (k == 2) return TASK_KIND_TELEGRAM;
+        if (k == 3) return TASK_KIND_RETWEET;
+        if (k == 4) return TASK_KIND_QUOTE;
+        if (k == 5) return TASK_KIND_LIKE;
+        if (k == 6) return TASK_KIND_COMMENT;
+        if (k == 7) return TASK_KIND_JOIN;
+        if (k == 8) return TASK_KIND_SHARE;
+        if (k == 9) return TASK_KIND_WATCH;
+        if (k == 10) return TASK_KIND_FOLLOW;
+        if (k == 11) return TASK_KIND_CUSTOM;
+        return bytes32(0);
+    }
+
+    function requireTaskExists(bytes32 taskId) external view returns (bool) {
+        if (_tasks[taskId].merkleRoot == bytes32(0)) return false;
+        return true;
+    }
+
+    function getMultipleTaskSummaries(bytes32[] calldata taskIds) external view returns (
+        uint256[] memory rewards,
+        uint256[] memory endBlocks,
+        uint256[] memory pools,
