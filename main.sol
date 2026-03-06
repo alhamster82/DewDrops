@@ -1594,3 +1594,87 @@ contract DewDrops {
     function getPercent(uint256 part, uint256 whole) external pure returns (uint256) { return percentOf(part, whole); }
     function getBlocksToTime(uint256 blocks, uint256 secPerBlock) external pure returns (uint256) { return blocksToApproxTime(blocks, secPerBlock); }
 
+    function getAllTaskIds() external view returns (bytes32[] memory) {
+        uint256 n = _taskIdList.length;
+        bytes32[] memory out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskIdList[i];
+        return out;
+    }
+
+    function getTaskIdAtIndex(uint256 index) external view returns (bytes32) {
+        if (index >= _taskIdList.length) revert Mist_IndexOutOfRange();
+        return _taskIdList[index];
+    }
+
+    function getActiveCount() external view returns (uint256) {
+        return countActiveTasks();
+    }
+
+    function getTotalPoolWei() external view returns (uint256) {
+        return totalPoolBalance();
+    }
+
+    function getTaskKindCount(uint8 kind) external view returns (uint256) {
+        return countTasksByKind(kind);
+    }
+
+    function getTaskSummaryView(bytes32 taskId) external view returns (
+        uint256 reward,
+        uint256 endBlockNum,
+        uint256 poolWei,
+        uint256 claimedWei,
+        bool isActive,
+        bool hasVesting
+    ) {
+        MistTask storage t = _tasks[taskId];
+        reward = t.rewardPerClaim;
+        endBlockNum = t.endBlock;
+        poolWei = t.poolBalance;
+        claimedWei = t.totalClaimed;
+        isActive = t.merkleRoot != bytes32(0) && !t.disabled && block.number <= t.endBlock;
+        hasVesting = _vestConfig[taskId].enabled;
+    }
+
+    function getParticipantView(address account) external view returns (
+        uint256 totalClaimedWei
+    ) {
+        totalClaimedWei = _userTotalClaimed[account];
+    }
+
+    function getContractView() external view returns (
+        uint256 numTasks,
+        uint256 globalClaimedWei,
+        uint256 balanceWei,
+        bool pausedState
+    ) {
+        numTasks = _taskCount;
+        globalClaimedWei = _globalTotalClaimed;
+        balanceWei = address(this).balance;
+        pausedState = _paused;
+    }
+
+    function getAddressesView() external view returns (
+        address treasuryAddress,
+        address verifierAddress,
+        address guardianHubAddress
+    ) {
+        treasuryAddress = treasury;
+        verifierAddress = taskVerifier;
+        guardianHubAddress = guardianHub;
+    }
+
+    function getConfigView() external pure returns (
+        uint256 version,
+        uint256 maxTaskKindVal,
+        uint256 maxClaimBatchVal,
+        uint256 pageSizeVal
+    ) {
+        version = MIST_VERSION;
+        maxTaskKindVal = MAX_TASK_KIND;
+        maxClaimBatchVal = MAX_CLAIM_BATCH;
+        pageSizeVal = PAGE_SIZE;
+    }
+
+    function getTaskIdsSlice(uint256 start, uint256 length) external view returns (bytes32[] memory) {
+        uint256 total = _taskIdList.length;
+        if (start >= total || length == 0) return new bytes32[](0);
