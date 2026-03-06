@@ -1258,3 +1258,87 @@ contract DewDrops {
 
     function sumRewards(bytes32[] calldata taskIds) external view returns (uint256 total) {
         for (uint256 i = 0; i < taskIds.length; i++) total += _tasks[taskIds[i]].rewardPerClaim;
+    }
+
+    function sumPools(bytes32[] calldata taskIds) external view returns (uint256 total) {
+        for (uint256 i = 0; i < taskIds.length; i++) total += _tasks[taskIds[i]].poolBalance;
+    }
+
+    function sumClaimed(bytes32[] calldata taskIds) external view returns (uint256 total) {
+        for (uint256 i = 0; i < taskIds.length; i++) total += _tasks[taskIds[i]].totalClaimed;
+    }
+
+    function firstTaskId() external view returns (bytes32) {
+        if (_taskIdList.length == 0) return bytes32(0);
+        return _taskIdList[0];
+    }
+
+    function lastTaskId() external view returns (bytes32) {
+        if (_taskIdList.length == 0) return bytes32(0);
+        return _taskIdList[_taskIdList.length - 1];
+    }
+
+    function indexOfTaskId(bytes32 taskId) external view returns (int256) {
+        for (uint256 i = 0; i < _taskIdList.length; i++) {
+            if (_taskIdList[i] == taskId) return int256(i);
+        }
+        return -1;
+    }
+
+    function taskIdExists(bytes32 taskId) external view returns (bool) {
+        return _tasks[taskId].merkleRoot != bytes32(0);
+    }
+
+    function getConstants() external pure returns (
+        uint256 version,
+        uint256 maxTaskKind,
+        uint256 maxClaimBatch,
+        uint256 pageSize,
+        uint256 maxTasksPerBatch,
+        uint256 minRewardWei,
+        uint256 maxRewardWei
+    ) {
+        return (
+            MIST_VERSION,
+            MAX_TASK_KIND,
+            MAX_CLAIM_BATCH,
+            PAGE_SIZE,
+            MAX_TASKS_PER_BATCH,
+            MIN_REWARD_WEI,
+            MAX_REWARD_WEI
+        );
+    }
+
+    function getImmutables() external view returns (
+        address treasuryAddr,
+        address verifierAddr,
+        address guardianAddr
+    ) {
+        return (treasury, taskVerifier, guardianHub);
+    }
+
+    function getStateFlags() external view returns (
+        bool isPaused,
+        uint256 numTasks,
+        uint256 totalClaimedWei,
+        uint256 contractBal
+    ) {
+        return (_paused, _taskCount, _globalTotalClaimed, address(this).balance);
+    }
+
+    function userClaimedForTask(bytes32 taskId, address account) external view returns (uint256) {
+        return _vestClaimed[taskId][account] + (_vestPending[taskId][account] > 0 ? 0 : 0);
+    }
+
+    function hasAnyVestPending(address account, bytes32[] calldata taskIds) external view returns (bool) {
+        for (uint256 i = 0; i < taskIds.length; i++) {
+            if (_vestPending[taskIds[i]][account] > 0) return true;
+        }
+        return false;
+    }
+
+    function totalVestPendingForUser(address account, bytes32[] calldata taskIds) external view returns (uint256 total) {
+        for (uint256 i = 0; i < taskIds.length; i++) total += _vestPending[taskIds[i]][account];
+    }
+
+    function totalVestClaimedForUser(address account, bytes32[] calldata taskIds) external view returns (uint256 total) {
