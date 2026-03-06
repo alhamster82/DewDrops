@@ -334,3 +334,87 @@ contract DewDrops {
         }
         if (total != msg.value) revert Mist_ZeroAmount();
         emit PoolToppedBatch(n, msg.value);
+    }
+
+    function extendTaskEnd(bytes32 taskId, uint256 newEndBlock) external onlyGuardian whenNotPaused {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        if (newEndBlock <= block.number) revert Mist_EndBlockPast();
+        t.endBlock = newEndBlock;
+        emit MistTaskExtended(taskId, newEndBlock);
+    }
+
+    function disableTask(bytes32 taskId) external onlyGuardian {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        t.disabled = true;
+        emit MistTaskDisabled(taskId, block.number);
+    }
+
+    function topPool(bytes32 taskId, uint256 amount) external payable onlyGuardian whenNotPaused {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        if (amount != msg.value) revert Mist_ZeroAmount();
+        if (amount == 0) revert Mist_ZeroAmount();
+        t.poolBalance += amount;
+        emit DewPoolTopped(taskId, amount, t.poolBalance);
+    }
+
+    // -------------------------------------------------------------------------
+    // CLAIM (participants)
+    // -------------------------------------------------------------------------
+
+    function claimDroplet(
+        bytes32 taskId,
+        bytes32 proofNonce,
+        bytes32[] calldata merkleProof
+    ) external whenNotPaused nonReentrant {
+        MistTask storage t = _tasks[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        if (t.disabled) revert Mist_TaskDisabled();
+        if (block.number > t.endBlock) revert Mist_TaskExpired();
+        if (_fulfilled[taskId][proofNonce]) revert Mist_AlreadyFulfilled();
+
+        bytes32 leaf = keccak256(abi.encodePacked(msg.sender, proofNonce, taskId, DOMAIN_SEED));
+        if (!_verifyMerkle(merkleProof, t.merkleRoot, leaf)) revert Mist_InvalidProof();
+
+        uint256 amount = t.rewardPerClaim;
+        if (t.poolBalance < amount) revert Mist_PoolInsufficient();
+
+        _fulfilled[taskId][proofNonce] = true;
+        t.poolBalance -= amount;
+        t.totalClaimed += amount;
+        _userTotalClaimed[msg.sender] += amount;
+        _globalTotalClaimed += amount;
+
+        (bool ok,) = payable(msg.sender).call{value: amount}("");
+        if (!ok) revert Mist_TransferFailed();
+
+        emit DropletFulfilled(msg.sender, taskId, proofNonce, amount, block.number);
+        emit InnerDewClaimed(msg.sender, taskId, amount, t.totalClaimed);
+    }
+
+    mapping(bytes32 => mapping(address => uint256)) private _vestPending;
+
+    function claimDropletVested(
+        bytes32 taskId,
+        bytes32 proofNonce,
+        bytes32[] calldata merkleProof
+    ) external whenNotPaused nonReentrant {
+        MistTask storage t = _tasks[taskId];
+        VestConfig storage v = _vestConfig[taskId];
+        if (t.merkleRoot == bytes32(0)) revert Mist_TaskUnknown();
+        if (t.disabled) revert Mist_TaskDisabled();
+        if (block.number > t.endBlock) revert Mist_TaskExpired();
+        if (_fulfilled[taskId][proofNonce]) revert Mist_AlreadyFulfilled();
+        if (!v.enabled) revert Mist_NoVesting();
+
+        bytes32 leaf = keccak256(abi.encodePacked(msg.sender, proofNonce, taskId, DOMAIN_SEED));
+        if (!_verifyMerkle(merkleProof, t.merkleRoot, leaf)) revert Mist_InvalidProof();
+
+        uint256 amount = t.rewardPerClaim;
+        if (t.poolBalance < amount) revert Mist_PoolInsufficient();
+
+        _fulfilled[taskId][proofNonce] = true;
+        t.poolBalance -= amount;
+        _vestPending[taskId][msg.sender] += amount;
