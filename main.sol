@@ -1426,3 +1426,87 @@ contract DewDrops {
     }
 
     // -------------------------------------------------------------------------
+    // DEW DROPS — Find your inner dew (extended metadata views)
+    // -------------------------------------------------------------------------
+
+    function getTaskIdsBetweenIndices(uint256 start, uint256 end) external view returns (bytes32[] memory) {
+        if (start > end) return new bytes32[](0);
+        uint256 total = _taskIdList.length;
+        if (end > total) end = total;
+        if (start >= total) return new bytes32[](0);
+        uint256 n = end - start;
+        bytes32[] memory out = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) out[i] = _taskIdList[start + i];
+        return out;
+    }
+
+    function getRewardForTask(bytes32 taskId) external view returns (uint256) {
+        return _tasks[taskId].rewardPerClaim;
+    }
+
+    function getPoolForTask(bytes32 taskId) external view returns (uint256) {
+        return _tasks[taskId].poolBalance;
+    }
+
+    function getEndBlockForTask(bytes32 taskId) external view returns (uint256) {
+        return _tasks[taskId].endBlock;
+    }
+
+    function getTotalClaimedForTask(bytes32 taskId) external view returns (uint256) {
+        return _tasks[taskId].totalClaimed;
+    }
+
+    function getDisabledForTask(bytes32 taskId) external view returns (bool) {
+        return _tasks[taskId].disabled;
+    }
+
+    function getKindForTask(bytes32 taskId) external view returns (uint8) {
+        return _tasks[taskId].taskKind;
+    }
+
+    function getMerkleRootForTask(bytes32 taskId) external view returns (bytes32) {
+        return _tasks[taskId].merkleRoot;
+    }
+
+    function getCreatedAtForTask(bytes32 taskId) external view returns (uint256) {
+        return _taskCreatedAt[taskId];
+    }
+
+    function getVestStartForTask(bytes32 taskId) external view returns (uint256) {
+        return _vestConfig[taskId].startBlock;
+    }
+
+    function getVestCliffForTask(bytes32 taskId) external view returns (uint256) {
+        return _vestConfig[taskId].cliffBlocks;
+    }
+
+    function getVestDurationForTask(bytes32 taskId) external view returns (uint256) {
+        return _vestConfig[taskId].durationBlocks;
+    }
+
+    function getVestEnabledForTask(bytes32 taskId) external view returns (bool) {
+        return _vestConfig[taskId].enabled;
+    }
+
+    function getPendingVestForUser(bytes32 taskId, address user) external view returns (uint256) {
+        return _vestPending[taskId][user];
+    }
+
+    function getClaimedVestForUser(bytes32 taskId, address user) external view returns (uint256) {
+        return _vestClaimed[taskId][user];
+    }
+
+    function getClaimableVestForUser(bytes32 taskId, address user) external view returns (uint256) {
+        VestConfig storage v = _vestConfig[taskId];
+        if (!v.enabled) return 0;
+        uint256 pending = _vestPending[taskId][user];
+        if (pending == 0) return 0;
+        if (block.number < v.startBlock + v.cliffBlocks) return 0;
+        uint256 elapsed = block.number - v.startBlock;
+        if (elapsed > v.durationBlocks) elapsed = v.durationBlocks;
+        uint256 vestedTotal = (pending * elapsed) / v.durationBlocks;
+        uint256 already = _vestClaimed[taskId][user];
+        return vestedTotal > already ? vestedTotal - already : 0;
+    }
+
+    function getRemainingBlocks(bytes32 taskId) external view returns (uint256) {
