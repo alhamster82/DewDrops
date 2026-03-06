@@ -82,3 +82,87 @@ contract DewDrops {
     error Mist_InvalidCliff();
     error Mist_InvalidDuration();
 
+    // -------------------------------------------------------------------------
+    // CONSTANTS
+    // -------------------------------------------------------------------------
+
+    uint256 public constant MIST_VERSION = 2;
+    uint256 public constant MAX_TASK_KIND = 12;
+    uint256 public constant MIN_END_BLOCK_OFFSET = 100;
+    uint256 public constant MAX_CLAIM_BATCH = 88;
+    uint256 public constant DEW_NAMESPACE = 0x8f3a2b1c9d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d;
+    bytes32 public constant DOMAIN_SEED = keccak256("DewDrops.Mist.v2");
+    uint256 public constant MAX_TASKS_PER_BATCH = 24;
+    uint256 public constant MIN_REWARD_WEI = 1;
+    uint256 public constant MAX_REWARD_WEI = 1000 ether;
+    uint256 public constant DEFAULT_VEST_CLIFF_BLOCKS = 200;
+    uint256 public constant DEFAULT_VEST_DURATION_BLOCKS = 1000;
+    uint256 public constant PAGE_SIZE = 50;
+    bytes32 public constant TASK_KIND_TWITTER = keccak256("twitter");
+    bytes32 public constant TASK_KIND_DISCORD = keccak256("discord");
+    bytes32 public constant TASK_KIND_TELEGRAM = keccak256("telegram");
+    bytes32 public constant TASK_KIND_RETWEET = keccak256("retweet");
+    bytes32 public constant TASK_KIND_QUOTE = keccak256("quote");
+    bytes32 public constant TASK_KIND_LIKE = keccak256("like");
+    bytes32 public constant TASK_KIND_COMMENT = keccak256("comment");
+    bytes32 public constant TASK_KIND_JOIN = keccak256("join");
+    bytes32 public constant TASK_KIND_SHARE = keccak256("share");
+    bytes32 public constant TASK_KIND_WATCH = keccak256("watch");
+    bytes32 public constant TASK_KIND_FOLLOW = keccak256("follow");
+    bytes32 public constant TASK_KIND_CUSTOM = keccak256("custom");
+
+    // -------------------------------------------------------------------------
+    // IMMUTABLES
+    // -------------------------------------------------------------------------
+
+    address public immutable treasury;
+    address public immutable taskVerifier;
+    address public immutable guardianHub;
+
+    // -------------------------------------------------------------------------
+    // STATE
+    // -------------------------------------------------------------------------
+
+    struct MistTask {
+        uint8 taskKind;
+        uint256 rewardPerClaim;
+        uint256 endBlock;
+        bytes32 merkleRoot;
+        uint256 poolBalance;
+        bool disabled;
+        uint256 totalClaimed;
+    }
+
+    mapping(bytes32 => MistTask) private _tasks;
+    mapping(bytes32 => mapping(bytes32 => bool)) private _fulfilled;
+    mapping(address => bool) private _guardians;
+    bool private _paused;
+    uint256 private _lock;
+    bytes32[] private _taskIdList;
+    uint256 private _taskCount;
+
+    struct VestConfig {
+        uint256 startBlock;
+        uint256 cliffBlocks;
+        uint256 durationBlocks;
+        bool enabled;
+    }
+    mapping(bytes32 => VestConfig) private _vestConfig;
+    mapping(bytes32 => mapping(address => uint256)) private _vestClaimed;
+
+    mapping(bytes32 => uint256) private _taskCreatedAt;
+    mapping(address => uint256) private _userTotalClaimed;
+    uint256 private _globalTotalClaimed;
+
+    // -------------------------------------------------------------------------
+    // CONSTRUCTOR
+    // -------------------------------------------------------------------------
+
+    constructor() {
+        treasury = 0xa1b2c3d4e5f6789012345678901234567890abcd;
+        taskVerifier = 0xb2c3d4e5f6789012345678901234567890abcde1;
+        guardianHub = 0xc3d4e5f6789012345678901234567890abcdef12;
+        _guardians[0xc3d4e5f6789012345678901234567890abcdef12] = true;
+    }
+
+    // -------------------------------------------------------------------------
